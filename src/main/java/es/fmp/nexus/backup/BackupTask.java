@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import javax.inject.Inject;
 import javax.inject.Named;
 
+import org.apache.commons.lang3.StringUtils;
 import org.sonatype.goodies.common.MultipleFailures;
 import org.sonatype.goodies.i18n.I18N;
 import org.sonatype.goodies.i18n.MessageBundle;
@@ -57,6 +58,8 @@ public class BackupTask extends TaskSupport implements Cancelable {
 
     private String location;
 
+    private String cmd;
+
     private final DatabaseBackup databaseBackup;
 
     private final BlobBackup blobBackup;
@@ -87,6 +90,7 @@ public class BackupTask extends TaskSupport implements Cancelable {
     public void configure(final TaskConfiguration configuration) {
         super.configure(configuration);
         this.location = configuration.getString(BackupTaskDescriptor.BACKUP_LOCATION);
+        this.cmd = configuration.getString(BackupTaskDescriptor.BLOB_BACKUP_CMD);
     }
 
     private File createBackupDirIfMissing(String basePath, String name) {
@@ -113,7 +117,7 @@ public class BackupTask extends TaskSupport implements Cancelable {
 
         File blobBackupPath = createBackupDirIfMissing(location, "blob");
         File dbBackupPath = createBackupDirIfMissing(location, "db");
-        
+
         MultipleFailures failures = new MultipleFailures();
 
         final FreezeRequest request = freezeService.requestFreeze(InitiatorType.SYSTEM, getConfiguration().getName());
@@ -132,15 +136,30 @@ public class BackupTask extends TaskSupport implements Cancelable {
             }
         }
 
-        for (String blobName : blobBackup.blobNames()) {
+        if (!StringUtils.isEmpty(cmd)) {
             try {
-                log.info("blob backup of {} starting", blobName);
-                Callable<Void> job = blobBackup.fullBackup(blobBackupPath.getAbsolutePath(), blobName, timestamp);
+                log.info("blobs backup with external cmd starting");
+                Callable<Void> job = blobBackup.externalBackup(cmd);
                 jobs.add(job);
             } catch (Exception e) {
-                failures.add(new RuntimeException(
-                        String.format("blob backup of %s to location: %s please check filesystem permissions and that the location exists", blobName, location),
-                        e));
+                    failures.add(new RuntimeException(
+                            String.format("blobs backup with external cmd: %s please review external tool logs", cmd), e));
+            }
+        } else {
+            for (String blobName : blobBackup.blobNames()) {
+                try {
+                    log.info("blob backup of {} starting", blobName);
+                    Callable<Void> job = blobBackup.internalBackup(blobBackupPath.getAbsolutePath(), blobName, timestamp);
+                    jobs.add(job);
+                } catch (Exception e) {
+                    if (StringUtils.isEmpty(cmd)) {
+                        failures.add(new RuntimeException(String.format(
+                                "blob backup of %s to location: %s please check filesystem permissions and that the location exists", blobName, location), e));
+                    } else {
+                        failures.add(new RuntimeException(
+                                String.format("blob backup of %s using external cmd: %s please review external tool logs", blobName, cmd), e));
+                    }
+                }
             }
         }
 

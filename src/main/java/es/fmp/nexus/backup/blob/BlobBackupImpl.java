@@ -53,10 +53,14 @@ public class BlobBackupImpl extends ComponentSupport implements BlobBackup {
     }
 
     @Override
-    public Callable<Void> fullBackup(final String backupFolder, final String blobStoreName, final LocalDateTime timestamp) throws IOException {
+    public Callable<Void> internalBackup(final String backupFolder, final String blobStoreName, final LocalDateTime timestamp) throws IOException {
         File backupFile = checkTarget(backupFolder, blobStoreName, timestamp);
         return new BlobBackupRunner(getBlobStorePath(blobStoreName), backupFile);
+    }
 
+    @Override
+    public Callable<Void> externalBackup(final String cmd) throws IOException {
+        return new BlobBackupRunner(cmd);
     }
 
     @VisibleForTesting

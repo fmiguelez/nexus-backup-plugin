@@ -1,6 +1,7 @@
 package es.fmp.nexus.backup;
 
 import static org.sonatype.nexus.formfields.FormField.MANDATORY;
+import static org.sonatype.nexus.formfields.FormField.OPTIONAL;
 
 /*
  * Adapted from https://github.com/sonatype/nexus-public/blob/master/components/nexus-core/src/main/java/org/sonatype/nexus/internal/backup/BackupTaskDescriptor.java
@@ -33,6 +34,8 @@ public class BackupTaskDescriptor
 
   public static final String BACKUP_LOCATION = "location";
 
+  public static final String BLOB_BACKUP_CMD = "cmd";
+
   private interface Messages
       extends MessageBundle
   {
@@ -44,6 +47,12 @@ public class BackupTaskDescriptor
 
     @DefaultMessage("Filesystem location for backup data")
     String locationHelpText();
+
+    @DefaultMessage("Blob store backup command")
+    String cmdLabel();
+
+    @DefaultMessage("If specified, provided system command is used to back up blobs instead of generating bak files")
+    String cmdText();
   }
 
   private static final Messages messages = I18N.create(Messages.class);
@@ -57,6 +66,12 @@ public class BackupTaskDescriptor
             messages.locationLabel(),
             messages.locationHelpText(),
             MANDATORY
+        ),
+        new StringTextFormField(
+             BLOB_BACKUP_CMD,
+             messages.cmdLabel(),
+             messages.cmdText(),
+             OPTIONAL
         ),
         nodeAccess.isClustered() ? newLimitNodeFormField() : null
     );

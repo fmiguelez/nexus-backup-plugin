@@ -30,6 +30,16 @@ public interface BlobBackup
    * @return java.util.concurrent.Callable For storing backup data
    * @throws IOException
    */
-  Callable<Void> fullBackup(String backupFolder, String blobName, LocalDateTime timestamp) throws IOException;
+  Callable<Void> internalBackup(String backupFolder, String blobName, LocalDateTime timestamp) throws IOException;
+
+
+  /**
+   * Creates a backup job
+   *
+   * @param cmd External command to use alternatively to perform backup (all blob stores at once)
+   * @return java.util.concurrent.Callable For storing backup data
+   * @throws IOException
+   */
+  Callable<Void> externalBackup(String cmd) throws IOException;
 
 }

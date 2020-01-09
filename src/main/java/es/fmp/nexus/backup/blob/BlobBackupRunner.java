@@ -3,6 +3,7 @@ package es.fmp.nexus.backup.blob;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 
 /*
  * Inspired by https://github.com/sonatype/nexus-public/blob/master/components/nexus-core/src/main/java/org/sonatype/nexus/internal/backup/DatabaseBackupRunner.java
@@ -10,12 +11,14 @@ import java.io.BufferedOutputStream;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import org.apache.commons.lang.SystemUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.DurationFormatUtils;
 import org.slf4j.Logger;
@@ -33,6 +36,8 @@ public class BlobBackupRunner implements Callable<Void> {
 
     private final File backupFile;
 
+    private final String cmd;
+
     /**
      * Constructor to instantiate thread for executing database backup
      *
@@ -44,6 +49,19 @@ public class BlobBackupRunner implements Callable<Void> {
     public BlobBackupRunner(final Path blobStorePath, final File backupFile) {
         this.blobStorePath = checkNotNull(blobStorePath);
         this.backupFile = checkNotNull(backupFile);
+        this.cmd = null;
+    }
+
+    /**
+     * Constructor to instantiate thread for executing database backup
+     *
+     * @param cmd
+     *            external command to use
+     */
+    public BlobBackupRunner(final String cmd) {
+        this.cmd = checkNotNull(cmd);
+        this.blobStorePath = null;
+        this.backupFile = null;
     }
 
     private class ZipStats {
@@ -108,12 +126,44 @@ public class BlobBackupRunner implements Callable<Void> {
                                                         : String.format("%.1f EiB", (bytes >> 20) / 0x1p40);
     }
 
+    private void externalBackup(String cmd) throws IOException, InterruptedException {
+        ProcessBuilder processBuilder = new ProcessBuilder();
+
+        if(SystemUtils.IS_OS_WINDOWS) { 
+            processBuilder.command("cmd.exe", "/c", cmd);
+        } else {
+            processBuilder.command("bash", "-c", cmd);
+        }
+
+        long start = System.currentTimeMillis();
+
+        Process process = processBuilder.start();
+
+        log.info("backup of blob stores started with external command \"{}\".", cmd);
+
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+
+        String line;
+        while ((line = reader.readLine()) != null) {
+            log.info("out> {}", line);
+        }
+
+        int exitCode = process.waitFor();
+
+        long elapsedTime = System.currentTimeMillis() - start;
+
+        log.info("backup of blob stores with external command  finished {} in {}.", (exitCode == 0 ? "successfully" : "with error code " + exitCode),
+                DurationFormatUtils.formatDuration(elapsedTime, "HH:mm:ss.S"));
+    }
+
     private void backup(Path blobStorePath, File zipFile) throws IOException {
         Path p = zipFile.toPath();
         long start = System.currentTimeMillis();
 
         final ZipStats stats = new ZipStats(zipFile.getName());
         try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(p)))) {
+            // No compression to speed up backup
+            zos.setLevel(0);
             Files.walk(blobStorePath).forEach(path -> {
                 String relativizedPath = blobStorePath.relativize(path).toString();
                 if (!StringUtils.isEmpty(relativizedPath)) {
@@ -144,7 +194,11 @@ public class BlobBackupRunner implements Callable<Void> {
     @Override
     public Void call() throws Exception {
         try {
-            backup(blobStorePath, backupFile);
+            if (cmd != null) {
+                externalBackup(cmd);
+            } else {
+                backup(blobStorePath, backupFile);
+            }
         } catch (Throwable e) {
             throw new RuntimeException(String.format("backup of blob store %s to file %s failed", blobStorePath.getFileName(), backupFile.getName()), e);
         }
