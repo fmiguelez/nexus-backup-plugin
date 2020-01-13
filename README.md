@@ -38,7 +38,7 @@ Configuration options are similar to the standard _"Admin - Export databases for
 
 Blob store backup takes all files in every blob store subfolder and stores them in a compression-less zip file (with `.bak` extension) following same name pattern as the one used by db backups. This operation can be very slow (many hours) for blob stores with large number of small files that tend to also require many small blob files (although not that many). If this is the case _"Blob store backup command"_ option can be specified to use a more efficient backup method (e.g. using [rsync](https://rsync.samba.org/)). In this case instead of producing `.bak` files in `blob` subdirectory the given system command will be executed.       
 
-## Backup restoration
+## Backup Restore
 
 Database backup restoration follows the same standard procedure as specified by [Sonatype documentation](https://help.sonatype.com/repomanager3/backup-and-restore/restore-exported-databases). However there is no automatic method to restore blob files. They must be restored manually. 
 
